@@ -1,13 +1,6 @@
-# gen.nvim
+# nopilot.nvim
 
-Generate text using LLMs with customizable prompts
-
-![gen_nvim](https://github.com/David-Kunz/gen.nvim/assets/1009936/79f17157-9327-484a-811b-2d71ceb8fbe3)
-
-## Video
-
-[![Local LLMs in Neovim: gen.nvim](https://user-images.githubusercontent.com/1009936/273126287-7b5f2b40-c678-47c5-8f21-edf9516f6034.jpg)](https://youtu.be/FIZt7MinpMY?si=KChSuJJDyrcTdYiM)
-
+A fork of the teriffic plugin from David-Kunz `gen.nvim`.
 
 ## Requires
 
@@ -22,7 +15,7 @@ Example with Lazy
 
 ```lua
 -- Minimal configuration
-{ "David-Kunz/gen.nvim" },
+{ "dleemiller/nopilot.nvim" },
 
 ```
 
@@ -30,7 +23,7 @@ Example with Lazy
 
 -- Custom Parameters (with defaults)
 {
-    "David-Kunz/gen.nvim",
+    "dleemiller/nopilot.nvim",
     opts = {
         model = "mistral", -- The default model to use.
         display_mode = "float", -- The display mode. Can be "float" or "split".
@@ -55,7 +48,7 @@ Here are all [available models](https://ollama.ai/library).
 Alternatively, you can call the `setup` function:
 
 ```lua
-require('gen').setup({
+require('nopilot').setup({
   -- same as above
 })
 ```
@@ -64,24 +57,24 @@ require('gen').setup({
 
 ## Usage
 
-Use command `Gen` to generate text based on predefined and customizable prompts.
+Use command `np` to generate text based on predefined and customizable prompts.
 
 Example key maps:
 
 ```lua
-vim.keymap.set({ 'n', 'v' }, '<leader>]', ':Gen<CR>')
+vim.keymap.set({ 'n', 'v' }, '<leader>]', ':<CR>')
 ```
 
-You can also directly invoke it with one of the [predefined prompts](./lua/gen/prompts.lua):
+You can also directly invoke it with one of the [predefined prompts](./lua/nopilot/prompts.lua):
 
 ```lua
-vim.keymap.set('v', '<leader>]', ':Gen Enhance_Grammar_Spelling<CR>')
+vim.keymap.set('v', '<leader>]', ':np alter<CR>')
 ```
 
 Once a conversation is started, the whole context is sent to the LLM. That allows you to ask follow-up questions with
 
 ```lua
-:Gen Chat
+:np chat
 ```
 
 and once the window is closed, you start with a fresh conversation.
@@ -89,23 +82,21 @@ and once the window is closed, you start with a fresh conversation.
 You can select a model from a list of all installed models with
 
 ```lua
-require('gen').select_model()
+require('np').select_model()
 ```
 
 ## Custom Prompts
 
-All prompts are defined in `require('gen').prompts`, you can enhance or modify them.
+All prompts are defined in `require('np').prompts`, you can enhance or modify them.
 
 Example:
 ```lua
-require('gen').prompts['Elaborate_Text'] = {
-  prompt = "Elaborate the following text:\n$text",
-  replace = true
-}
-require('gen').prompts['Fix_Code'] = {
-  prompt = "Fix the following code. Only ouput the result in format ```$filetype\n...\n```:\n```$filetype\n$text\n```",
-  replace = true,
-  extract = "```$filetype\n(.-)```"
+require('np').prompts['complete'] = {
+  prompt = "Complete the following code. Only ouput the result in format ```$filetype\n...\n```:\n```$filetype\n$text\n```",
+  replace = false,
+  options = {
+    temperature = 0.1
+  }
 }
 ```
 
