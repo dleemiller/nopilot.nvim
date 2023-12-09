@@ -26,7 +26,6 @@ local default_options = {
     show_model = false,
     command = 'curl --silent --no-buffer -X POST http://localhost:11434/api/generate -d $body',
     json_response = true,
-    no_auto_close = false,
     display_mode = "float",
     no_auto_close = false,
     init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
@@ -129,7 +128,8 @@ M.exec = function(options)
 
     if type(opts.init) == 'function' then opts.init(opts) end
 
-    curr_buffer = vim.fn.bufnr("%")
+    -- curr_buffer = vim.fn.bufnr("%")
+    curr_buffer = vim.api.nvim_get_current_buf()
     local mode = opts.mode or vim.fn.mode()
     if mode == "v" or mode == "V" then
         start_pos = vim.fn.getpos("'<")
@@ -195,10 +195,41 @@ M.exec = function(options)
         local prompt_escaped = vim.fn.shellescape(prompt)
         cmd = string.gsub(cmd, "%$prompt", prompt_escaped)
     end
+
     cmd = string.gsub(cmd, "%$model", opts.model)
+
     if string.find(cmd, "%$body") then
-        local body = {model = opts.model, prompt = prompt, stream = true}
-        if M.context then body.context = M.context end
+        local body = {
+            model = opts.model,
+            prompt = prompt,
+            stream = true,
+            options = {}  -- Initialize the options as an empty table
+        }
+
+        -- Include context if it exists
+        if M.context then
+            body.context = M.context
+        end
+
+        -- Loop through optional parameters and include them if they were set in the opts
+        local optional_params = {
+            "num_keep", "seed", "num_predict", "top_k", "top_p", "tfs_z",
+            "typical_p", "repeat_last_n", "temperature", "repeat_penalty",
+            "presence_penalty", "frequency_penalty", "mirostat",
+            "mirostat_tau", "mirostat_eta", "penalize_newline", "stop",
+            "numa", "num_ctx", "num_batch", "num_gqa", "num_gpu", "main_gpu",
+            "low_vram", "f16_kv", "logits_all", "vocab_only", "use_mmap",
+            "use_mlock", "embedding_only", "rope_frequency_base",
+            "rope_frequency_scale", "num_thread"
+        }
+
+        for _, param in ipairs(optional_params) do
+            if opts.options and opts.options[param] ~= nil then
+                body.options[param] = opts.options[param]
+            end
+        end
+
+        -- Encode to JSON and shell-escape
         local json = vim.fn.json_encode(body)
         json = vim.fn.shellescape(json)
         cmd = string.gsub(cmd, "%$body", json)
@@ -272,9 +303,17 @@ M.exec = function(options)
                     local extracted = M.result_string:match(extractor)
                     if not extracted then
                         if not opts.no_auto_close then
-                            vim.api.nvim_win_hide(M.float_win)
-                            vim.api.nvim_buf_delete(M.result_buffer,
-                                                    {force = true})
+                            -- Close the floating window if it's valid
+                            if M.float_win and vim.api.nvim_win_is_valid(M.float_win) then
+                                vim.api.nvim_win_hide(M.float_win)
+                            end
+
+                            -- Ensure that the buffer ID is valid before attempting to delete
+                            if M.result_buffer and vim.api.nvim_buf_is_valid(M.result_buffer) then
+                                vim.api.nvim_buf_delete(M.result_buffer, {force = true})
+                            else
+                                print("Error: Invalid buffer ID for deletion.")
+                            end
                             reset()
                         end
                         return
@@ -288,8 +327,17 @@ M.exec = function(options)
                                           start_pos[3] - 1, end_pos[2] - 1,
                                           end_pos[3] - 1, lines)
                 if not opts.no_auto_close then
-                    if M.float_win ~= nil then vim.api.nvim_win_hide(M.float_win) end
-                    if M.result_buffer ~= nil then vim.api.nvim_buf_delete(M.result_buffer, {force = true}) end
+                    -- Close the floating window if it's valid
+                    if M.float_win and vim.api.nvim_win_is_valid(M.float_win) then
+                        vim.api.nvim_win_hide(M.float_win)
+                    end
+
+                    -- Ensure that the buffer ID is valid before attempting to delete
+                    if M.result_buffer and vim.api.nvim_buf_is_valid(M.result_buffer) then
+                        vim.api.nvim_buf_delete(M.result_buffer, {force = true})
+                    else
+                        print("Error: Invalid buffer ID for deletion.")
+                    end
                     reset()
                 end
             end
@@ -332,11 +380,85 @@ M.exec = function(options)
         })
     end
 
-    vim.keymap.set("n", "<esc>", function() vim.fn.jobstop(job_id) end,
-                   {buffer = M.result_buffer})
+    -- Determine which buffer to use for the key mappings
+    if M.result_buffer and vim.api.nvim_buf_is_valid(M.result_buffer) then
+        -- Floating window / overlay for instructions
+        local instructions_win
+        local function show_instructions()
+            local buf = vim.api.nvim_create_buf(false, true)
+            local lines = {"'r' - Replace", "'esc' - Cancel"}
+            vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+            local width = math.max(unpack(vim.tbl_map(function(s) return #s end, lines)))
+            local win_opts = {
+                style = "minimal",
+                relative = "cursor",
+                width = width + 2,
+                height = #lines,
+                row = 1,
+                col = 1
+            }
+            instructions_win = vim.api.nvim_open_win(buf, false, win_opts)
+        end
 
-    vim.api.nvim_buf_attach(M.result_buffer, false,
-                            {on_detach = function() M.result_buffer = nil end})
+        -- Function that captures text from a visual selection in the current buffer
+        -- This function should be invoked before the result buffer is closed
+        local function get_visual_selection(bufnr)
+            local start_mark = vim.api.nvim_buf_get_mark(bufnr, '<')
+            local end_mark = vim.api.nvim_buf_get_mark(bufnr, '>')
+            local text = vim.api.nvim_buf_get_lines(bufnr, start_mark[1] - 1, end_mark[1], false)
+            return table.concat(text, vim.api.nvim_get_option('eol') and "\n" or "")
+        end
+
+        -- Replace the original selection with the given text
+        local function replace_original_selection(text)
+            -- Ensure that 'start_pos' and 'end_pos' are correctly set to the original visual selection in the 'curr_buffer'
+            local trimmed_lines = vim.split(text, "\n", true)
+            vim.api.nvim_buf_set_text(curr_buffer, start_pos[2] - 1, start_pos[3]-1, end_pos[2] - 1, end_pos[3] - 1, trimmed_lines)
+            -- vim.api.nvim_set_lines(curr_buffer, start_pos[2] - 1, end_pos[2], trimmed_lines)
+        end
+
+        local function close_floating_windows()
+            if instructions_win and vim.api.nvim_win_is_valid(instructions_win) then
+                vim.api.nvim_win_close(instructions_win, true)
+            end
+            if M.float_win and vim.api.nvim_win_is_valid(M.float_win) then
+                vim.api.nvim_win_close(M.float_win, true)
+            end
+        end
+
+        local function delete_result_buffer()
+            if M.result_buffer and vim.api.nvim_buf_is_valid(M.result_buffer) then
+                vim.api.nvim_buf_delete(M.result_buffer, {force = true})
+            end
+        end
+
+        -- Keymapping for 'Enter' in visual mode
+        -- The keymap callback function is set to normal mode ('n') since it will be used in the 'commands' mode
+        vim.keymap.set("x", "<CR>", function()
+            -- Capture the visual block from the result buffer before closing it, ensure correct buffer is active and visual mode is initiated.
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), 'n', true)
+            vim.api.nvim_set_current_buf(M.result_buffer)
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("gv", true, false, true), 'x', false)
+            M.result_string = get_visual_selection(M.result_buffer)
+            -- Replace the original text with the captured content
+            replace_original_selection(M.result_string)
+            -- Close the floating window and instructions window
+            close_floating_windows()
+            -- Delete the result buffer
+            delete_result_buffer()
+
+            -- Clear the plugin state and cleanup
+            reset()
+        end, {buffer = M.result_buffer, silent = true})
+
+        vim.keymap.set("n", "<esc>", function()
+            close_floating_windows()
+            delete_result_buffer()
+            reset()  -- Assuming reset() is a function that clears the plugin state
+        end, {buffer = M.result_buffer, silent = true})
+        -- Call the function to show overlay instructions after the floating window has been created.
+        -- show_instructions()
+    end
 end
 
 M.win_config = {}
