@@ -1,4 +1,4 @@
-local prompts = require("gen.prompts")
+local prompts = require("nopilot.prompts")
 local M = {}
 
 local curr_buffer = nil
@@ -476,7 +476,7 @@ function select_prompt(cb)
     }, function(item, idx) cb(item) end)
 end
 
-vim.api.nvim_create_user_command("Gen", function(arg)
+vim.api.nvim_create_user_command("np", function(arg)
     local mode
     if arg.range == 0 then
         mode = "n"
