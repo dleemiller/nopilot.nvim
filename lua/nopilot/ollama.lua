@@ -81,15 +81,6 @@ function ollama.new(config)
             cmd = string.gsub(cmd, "%$body", json)
         end
         return cmd
-        -- local body = vim.fn.json_encode({
-        --     model = opts.model,
-        --     prompt = opts.prompt,
-        --     temperature = opts.temperature,
-        --     max_tokens = opts.max_tokens,
-        --     -- Add any additional expected fields...
-        -- })
-        -- local curl_cmd = "curl --silent --no-buffer -X POST " .. url .. " -d " .. body
-        -- return curl_cmd
     end
 
     return self
