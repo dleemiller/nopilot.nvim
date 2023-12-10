@@ -2,6 +2,11 @@
 
 A fork of the teriffic plugin from David-Kunz `gen.nvim`.
 
+## Added features (2023/12/09):
+- Add API options
+- Use visual select in buffer window and hit enter for replace
+- Use visual select in buffer window and hit 't' for new tab
+
 ## Requires
 
 - [Ollama](https://ollama.ai/) with an appropriate model, e.g. [`mistral`](https://ollama.ai/library/mistral) or [`zephyr`](https://ollama.ai/library/zephyr) (customizable)
@@ -57,7 +62,7 @@ require('nopilot').setup({
 
 ## Usage
 
-Use command `np` to generate text based on predefined and customizable prompts.
+Use command `Np` to generate text based on predefined and customizable prompts.
 
 Example key maps:
 
@@ -68,13 +73,13 @@ vim.keymap.set({ 'n', 'v' }, '<leader>]', ':<CR>')
 You can also directly invoke it with one of the [predefined prompts](./lua/nopilot/prompts.lua):
 
 ```lua
-vim.keymap.set('v', '<leader>]', ':np alter<CR>')
+vim.keymap.set('v', '<leader>]', ':Np alter<CR>')
 ```
 
 Once a conversation is started, the whole context is sent to the LLM. That allows you to ask follow-up questions with
 
 ```lua
-:np chat
+:Np chat
 ```
 
 and once the window is closed, you start with a fresh conversation.
@@ -82,16 +87,16 @@ and once the window is closed, you start with a fresh conversation.
 You can select a model from a list of all installed models with
 
 ```lua
-require('np').select_model()
+require('Np').select_model()
 ```
 
 ## Custom Prompts
 
-All prompts are defined in `require('np').prompts`, you can enhance or modify them.
+All prompts are defined in `require('Np').prompts`, you can enhance or modify them.
 
 Example:
 ```lua
-require('np').prompts['complete'] = {
+require('Np').prompts['complete'] = {
   prompt = "Complete the following code. Only ouput the result in format ```$filetype\n...\n```:\n```$filetype\n$text\n```",
   replace = false,
   options = {
