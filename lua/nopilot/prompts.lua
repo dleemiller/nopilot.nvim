@@ -1,43 +1,60 @@
 return {
-    Generate = { prompt = "$input", replace = true },
-    Chat = { prompt = "$input" },
-    Summarize = { prompt = "Summarize the following text:\n$text" },
-    Ask = { prompt = "Regarding the following text, $input:\n$text" },
-    Change = {
-        prompt = "Change the following text, $input, just output the final text without additional quotes around it:\n$text",
-        replace = true,
+    chat = { prompt = "$input" },
+    annotate = {
+        prompt = "Add type annotations, but do not change the code or indentation.\n\nHere is the code:\n$text\n\nRemember to respond only with code inside a code block.",
+        replace = false,
     },
-    Enhance_Grammar_Spelling = {
-        prompt = "Modify the following text to improve grammar and spelling, just output the final text without additional quotes around it:\n$text",
-        replace = true,
+
+    docstring = {
+        prompt = "Add docstrings, but do not change the code or indentation.\n\nHere is the code:\n$text\n\nRemember to respond only with code inside a code block.",
+        replace = false,
     },
-    Enhance_Wording = {
-        prompt = "Modify the following text to use better wording, just output the final text without additional quotes around it:\n$text",
-        replace = true,
+    document = {
+        prompt = "Add a docstrings and type annotations, but do not change the code or indentation.\n\nHere is the code:\n$text\n\nRemember to only respond with code inside a code block.",
+        replace = false,
     },
-    Make_Concise = {
-        prompt = "Modify the following text to make it as simple and concise as possible, just output the final text without additional quotes around it:\n$text",
-        replace = true,
+
+    func = {
+        prompt = "Generate a python function with a docstring.\n\nHere is the function description:\n$input\n\nRemember to only respond with code inside a code block. Do not supply test code.",
+        replace = false,
     },
-    Make_List = {
-        prompt = "Render the following text as a markdown list:\n$text",
-        replace = true,
+
+    context = {
+        prompt = "Generate a python function with a docstring.\n\nHere is the context from the script to use as a reference:\n$text\n\nHere is the function description:\n$input\n\nRemember to only respond with code inside a code block. Do not supply test code. Be sure to write the new function in context with the provided script.",
+        replace = false,
     },
-    Make_Table = {
-        prompt = "Render the following text as a markdown table:\n$text",
-        replace = true,
+
+    alter = {
+      prompt = "Here is a section of code that needs to be rewritten:\n$text\n\nUse these instructions to make your alterations:\n$input\n\nRemember to only respond with the new code inside a code block. Do not supply test code.",
+      replace = false,
     },
-    Review_Code = {
-        prompt = "Review the following code and make concise suggestions:\n```$filetype\n$text\n```",
+
+    autotests = {
+      prompt = "Here is a section of code that needs to have tests written:\n$text\n\nMock interfaces and objects as needed.\n\nRemember to only respond with the new code inside a code block.",
+      replace = false,
     },
-    Enhance_Code = {
-        prompt = "Enhance the following code, only ouput the result in format ```$filetype\n...\n```:\n```$filetype\n$text\n```",
-        replace = true,
-        extract = "```$filetype\n(.-)```",
+
+    vars = {
+      prompt = "Use best practices to improve the naming of variables, functions or class names in this script. Only change the names of local variables.\n\nHere is the code:\n$text\n\nRemember to only respond with the new code inside a code block. It is not safe to change the names of functions, arguments or things that are not local.",
+      replace = false,
     },
-    Change_Code = {
-        prompt = "Regarding the following code, $input, only ouput the result in format ```$filetype\n...\n```:\n```$filetype\n$text\n```",
-        replace = true,
-        extract = "```$filetype\n(.-)```",
+
+    complete = {
+      prompt = "Complete the function, given the function definition and docstring.\n\nHere is the function to complete:\n$text\n\nRemember to only respond with the new code inside a code block.",
+      replace = false,
     },
+
+    query = {
+      prompt = "Use the provided code as context, along with expert knowledge to answer the user's question.\n\nHere is the code:\n$text\n\nQuestion:\n$input",
+      replace = false,
+    },
+
+    plan = {
+      prompt = "You will assist a user in planning a project. Your job is to do the planning and present it to the user.\n\nIf the user has started a plan it is here:\n$text\n\nUser's request:\n$input",
+      replace = false,
+      options = {
+          temperature = 1.2
+      }
+    }
 }
+

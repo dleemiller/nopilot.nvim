@@ -107,7 +107,7 @@ function create_window(opts)
 
         M.float_win = vim.api.nvim_open_win(M.result_buffer, true, win_opts)
     else
-        vim.cmd("vnew gen.nvim")
+        vim.cmd("vnew nopilot.nvim")
         M.result_buffer = vim.fn.bufnr("%")
         M.float_win = vim.fn.win_getid()
         vim.api.nvim_buf_set_option(M.result_buffer, "filetype", "markdown")
@@ -198,18 +198,29 @@ M.exec = function(options)
 
     cmd = string.gsub(cmd, "%$model", opts.model)
 
+    -- Helper function to check if a table is empty
+    local function is_table_empty(t)
+        if t == nil or next(t) == nil then
+            return true
+        else
+            return false
+        end
+    end
+
     if string.find(cmd, "%$body") then
         local body = {
             model = opts.model,
             prompt = prompt,
-            stream = true,
-            options = {}  -- Initialize the options as an empty table
+            stream = true
         }
 
         -- Include context if it exists
         if M.context then
             body.context = M.context
         end
+
+        -- Initialize an empty table for options
+        local options = {}
 
         -- Loop through optional parameters and include them if they were set in the opts
         local optional_params = {
@@ -225,8 +236,13 @@ M.exec = function(options)
 
         for _, param in ipairs(optional_params) do
             if opts.options and opts.options[param] ~= nil then
-                body.options[param] = opts.options[param]
+                options[param] = opts.options[param]
             end
+        end
+
+        -- Add options to the body only if options are not empty
+        if not is_table_empty(options) then
+            body.options = options
         end
 
         -- Encode to JSON and shell-escape
@@ -345,7 +361,7 @@ M.exec = function(options)
         end
     })
 
-    local group = vim.api.nvim_create_augroup("gen", {clear = true})
+    local group = vim.api.nvim_create_augroup("nopilot", {clear = true})
     local event
     vim.api.nvim_create_autocmd('WinClosed', {
         buffer = M.result_buffer,
@@ -382,24 +398,6 @@ M.exec = function(options)
 
     -- Determine which buffer to use for the key mappings
     if M.result_buffer and vim.api.nvim_buf_is_valid(M.result_buffer) then
-        -- Floating window / overlay for instructions
-        local instructions_win
-        local function show_instructions()
-            local buf = vim.api.nvim_create_buf(false, true)
-            local lines = {"'r' - Replace", "'esc' - Cancel"}
-            vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-            local width = math.max(unpack(vim.tbl_map(function(s) return #s end, lines)))
-            local win_opts = {
-                style = "minimal",
-                relative = "cursor",
-                width = width + 2,
-                height = #lines,
-                row = 1,
-                col = 1
-            }
-            instructions_win = vim.api.nvim_open_win(buf, false, win_opts)
-        end
-
         -- Function that captures text from a visual selection in the current buffer
         -- This function should be invoked before the result buffer is closed
         local function get_visual_selection(bufnr)
@@ -418,9 +416,6 @@ M.exec = function(options)
         end
 
         local function close_floating_windows()
-            if instructions_win and vim.api.nvim_win_is_valid(instructions_win) then
-                vim.api.nvim_win_close(instructions_win, true)
-            end
             if M.float_win and vim.api.nvim_win_is_valid(M.float_win) then
                 vim.api.nvim_win_close(M.float_win, true)
             end
@@ -451,13 +446,43 @@ M.exec = function(options)
             reset()
         end, {buffer = M.result_buffer, silent = true})
 
+        -- Function to open visual selection in a new tab
+        local function open_in_new_tab()
+            -- Escape from visual mode
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), 'n', true)
+            -- Make the result buffer the current buffer
+            vim.api.nvim_set_current_buf(M.result_buffer)
+            -- Re-select the previously visual block
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("gv", true, false, true), 'x', false)
+            -- Capture the visual block
+            M.result_string = get_visual_selection(M.result_buffer)
+            -- Open a new tab
+            vim.api.nvim_command("tabnew")
+            -- Paste the captured content into the new tab
+            local new_buffer = vim.api.nvim_get_current_buf()
+            vim.api.nvim_buf_set_lines(new_buffer, 0, -1, false, vim.split(M.result_string, "\n"))
+            -- Optionally set the buffer to unmodified state
+            vim.api.nvim_buf_set_option(new_buffer, 'modified', false)
+            -- Re-apply syntax highlighting, filetype, etc. if needed
+            -- e.g. vim.api.nvim_buf_set_option(new_buffer, 'filetype', '...')
+
+            -- Close the floating window and instructions window
+            close_floating_windows()
+            -- Delete the result buffer
+            delete_result_buffer()
+
+            -- Clear the plugin state and cleanup
+            reset()
+        end
+
+        -- Keymapping for 'Shift + Enter' in visual mode
+        vim.keymap.set("x", "t", open_in_new_tab, {buffer = M.result_buffer, silent = true})
+
         vim.keymap.set("n", "<esc>", function()
             close_floating_windows()
             delete_result_buffer()
             reset()  -- Assuming reset() is a function that clears the plugin state
         end, {buffer = M.result_buffer, silent = true})
-        -- Call the function to show overlay instructions after the floating window has been created.
-        -- show_instructions()
     end
 end
 
@@ -476,7 +501,7 @@ function select_prompt(cb)
     }, function(item, idx) cb(item) end)
 end
 
-vim.api.nvim_create_user_command("np", function(arg)
+vim.api.nvim_create_user_command("Np", function(arg)
     local mode
     if arg.range == 0 then
         mode = "n"
