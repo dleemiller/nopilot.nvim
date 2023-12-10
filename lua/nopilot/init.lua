@@ -33,7 +33,8 @@ local default_options = {
         config = {
             host = "localhost",
             port = 11434,
-            model = "mistral"
+            model = "mistral",
+            -- init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
         }
     },
     debug = false,
@@ -42,17 +43,6 @@ local default_options = {
     json_response = true,
     display_mode = "float",
     no_auto_close = false,
-    -- init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
---    list_models = function()
---        local response = vim.fn.systemlist("curl --silent --no-buffer http://flint:11434/api/tags")
---        local list = vim.fn.json_decode(response)
---        local models = {}
---        for key, _ in pairs(list.models) do
---            table.insert(models, list.models[key].name)
---        end
---        table.sort(models)
---        return models
---    end
 }
 for k, v in pairs(default_options) do M[k] = v end
 function M.setup(opts)
@@ -150,7 +140,7 @@ end
 M.exec = function(options)
     local opts = vim.tbl_deep_extend("force", M, options)
 
-    if type(opts.init) == 'function' then opts.init(opts) end
+    if type(M.backend.init) == 'function' then M.backend.init() end
 
     curr_buffer = vim.api.nvim_get_current_buf()
     local mode = opts.mode or vim.fn.mode()
@@ -319,7 +309,6 @@ M.exec = function(options)
     })
 
     local group = vim.api.nvim_create_augroup("nopilot", {clear = true})
-    local event
     vim.api.nvim_create_autocmd('WinClosed', {
         buffer = M.result_buffer,
         group = group,
