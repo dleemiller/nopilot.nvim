@@ -2,10 +2,14 @@
 
 A fork of the teriffic plugin from David-Kunz `gen.nvim`.
 
+Development in progress...
+
 ## Added features (2023/12/09):
 - Add API options
 - Use visual select in buffer window and hit enter for replace
 - Use visual select in buffer window and hit 't' for new tab
+## Added (2023/12/10):
+- Abstract ollama backend
 
 ## Requires
 
@@ -30,19 +34,19 @@ Example with Lazy
 {
     "dleemiller/nopilot.nvim",
     opts = {
-        model = "mistral", -- The default model to use.
+        backend = {
+            name = "ollama",
+            config = {
+                host = "flint",
+                port = 11434,
+                model = "deepseek-coder:6.7b-instruct-q6_K"
+            }
+        },
         display_mode = "float", -- The display mode. Can be "float" or "split".
         show_prompt = false, -- Shows the Prompt submitted to Ollama.
         show_model = false, -- Displays which model you are using at the beginning of your chat session.
         no_auto_close = false, -- Never closes the window automatically.
         init = function(options) pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
-        -- Function to initialize Ollama
-        command = "curl --silent --no-buffer -X POST http://localhost:11434/api/generate -d $body",
-        -- The command for the Ollama service. You can use placeholders $prompt, $model and $body (shellescaped).
-        -- This can also be a lua function returning a command string, with options as the input parameter.
-        -- The executed command must return a JSON object with { response, context }
-        -- (context property is optional).
-        list_models = '<function>', -- Retrieves a list of model names
         debug = false -- Prints errors and the command which is run.
     }
 },
@@ -87,16 +91,16 @@ and once the window is closed, you start with a fresh conversation.
 You can select a model from a list of all installed models with
 
 ```lua
-require('Np').select_model()
+require('nopilot').select_model()
 ```
 
 ## Custom Prompts
 
-All prompts are defined in `require('Np').prompts`, you can enhance or modify them.
+All prompts are defined in `require('nopilot').prompts`, you can enhance or modify them.
 
 Example:
 ```lua
-require('Np').prompts['complete'] = {
+require('nopilot').prompts['complete'] = {
   prompt = "Complete the following code. Only ouput the result in format ```$filetype\n...\n```:\n```$filetype\n$text\n```",
   replace = false,
   options = {
