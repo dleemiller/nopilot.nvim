@@ -1,5 +1,13 @@
 local prompts = require("nopilot.prompts")
-local M = {}
+local M = {
+    backends = {
+        ollama = require("nopilot.ollama"),
+--        exllama = require("nopilot.exllama"),
+    },
+    options = {
+        backend = "ollama"  -- Default backend
+    }
+}
 
 local curr_buffer = nil
 local start_pos = nil
@@ -20,30 +28,46 @@ local function trim_table(tbl)
 end
 
 local default_options = {
-    model = "mistral",
+    backend = {
+        name = "ollama",
+        config = {
+            host = "localhost",
+            port = 11434,
+            model = "mistral"
+        }
+    },
     debug = false,
     show_prompt = false,
     show_model = false,
-    command = 'curl --silent --no-buffer -X POST http://localhost:11434/api/generate -d $body',
     json_response = true,
     display_mode = "float",
     no_auto_close = false,
-    init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
-    list_models = function()
-        local response = vim.fn.systemlist(
-                             "curl --silent --no-buffer http://localhost:11434/api/tags")
-        local list = vim.fn.json_decode(response)
-        local models = {}
-        for key, _ in pairs(list.models) do
-            table.insert(models, list.models[key].name)
-        end
-        table.sort(models)
-        return models
-    end
+    -- init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
+--    list_models = function()
+--        local response = vim.fn.systemlist("curl --silent --no-buffer http://flint:11434/api/tags")
+--        local list = vim.fn.json_decode(response)
+--        local models = {}
+--        for key, _ in pairs(list.models) do
+--            table.insert(models, list.models[key].name)
+--        end
+--        table.sort(models)
+--        return models
+--    end
 }
 for k, v in pairs(default_options) do M[k] = v end
+function M.setup(opts)
+    for k, v in pairs(opts) do M[k] = v end
 
-M.setup = function(opts) for k, v in pairs(opts) do M[k] = v end end
+    -- Select the backend based on the options
+    local name = opts.backend.name
+    if M.backends[name] then
+        local config = opts.backend.config or {}
+        M.backend = M.backends[name].new(config)
+    else
+        error("Unknown backend: " .. backend_name)
+    end
+end
+
 
 local function get_window_options()
     local width = math.floor(vim.o.columns * 0.9) -- 90% of the current editor's width
@@ -76,7 +100,7 @@ local function get_window_options()
     }
 end
 
-function write_to_buffer(lines)
+local function write_to_buffer(lines)
     if not M.result_buffer or not vim.api.nvim_buf_is_valid(M.result_buffer) then
         return
     end
@@ -95,7 +119,7 @@ function write_to_buffer(lines)
     vim.api.nvim_buf_set_option(M.result_buffer, "modifiable", false)
 end
 
-function create_window(opts)
+local function create_window(opts)
     if M.display_mode == "float" then
         if M.result_buffer then
             vim.api.nvim_buf_delete(M.result_buffer, {force = true})
@@ -116,7 +140,7 @@ function create_window(opts)
     end
 end
 
-function reset()
+local function reset()
     M.result_buffer = nil
     M.float_win = nil
     M.result_string = ""
@@ -128,7 +152,6 @@ M.exec = function(options)
 
     if type(opts.init) == 'function' then opts.init(opts) end
 
-    -- curr_buffer = vim.fn.bufnr("%")
     curr_buffer = vim.api.nvim_get_current_buf()
     local mode = opts.mode or vim.fn.mode()
     if mode == "v" or mode == "V" then
@@ -171,8 +194,8 @@ M.exec = function(options)
         return text
     end
 
+    -- prompt formatting
     local prompt = opts.prompt
-
     if type(prompt) == "function" then
         prompt = prompt({content = content, filetype = vim.bo.filetype})
     end
@@ -183,73 +206,7 @@ M.exec = function(options)
     prompt = string.gsub(prompt, "%%", "%%%%")
 
     M.result_string = ""
-
-    local cmd
-    if type(opts.command) == 'function' then
-        cmd = opts.command(opts)
-    else
-        cmd = M.command
-    end
-
-    if string.find(cmd, "%$prompt") then
-        local prompt_escaped = vim.fn.shellescape(prompt)
-        cmd = string.gsub(cmd, "%$prompt", prompt_escaped)
-    end
-
-    cmd = string.gsub(cmd, "%$model", opts.model)
-
-    -- Helper function to check if a table is empty
-    local function is_table_empty(t)
-        if t == nil or next(t) == nil then
-            return true
-        else
-            return false
-        end
-    end
-
-    if string.find(cmd, "%$body") then
-        local body = {
-            model = opts.model,
-            prompt = prompt,
-            stream = true
-        }
-
-        -- Include context if it exists
-        if M.context then
-            body.context = M.context
-        end
-
-        -- Initialize an empty table for options
-        local options = {}
-
-        -- Loop through optional parameters and include them if they were set in the opts
-        local optional_params = {
-            "num_keep", "seed", "num_predict", "top_k", "top_p", "tfs_z",
-            "typical_p", "repeat_last_n", "temperature", "repeat_penalty",
-            "presence_penalty", "frequency_penalty", "mirostat",
-            "mirostat_tau", "mirostat_eta", "penalize_newline", "stop",
-            "numa", "num_ctx", "num_batch", "num_gqa", "num_gpu", "main_gpu",
-            "low_vram", "f16_kv", "logits_all", "vocab_only", "use_mmap",
-            "use_mlock", "embedding_only", "rope_frequency_base",
-            "rope_frequency_scale", "num_thread"
-        }
-
-        for _, param in ipairs(optional_params) do
-            if opts.options and opts.options[param] ~= nil then
-                options[param] = opts.options[param]
-            end
-        end
-
-        -- Add options to the body only if options are not empty
-        if not is_table_empty(options) then
-            body.options = options
-        end
-
-        -- Encode to JSON and shell-escape
-        local json = vim.fn.json_encode(body)
-        json = vim.fn.shellescape(json)
-        cmd = string.gsub(cmd, "%$body", json)
-    end
+    local cmd = M.backend:build_cmd(prompt, M.context, opts)
 
     if M.context ~= nil then write_to_buffer({"", "", "---", ""}) end
 
@@ -566,11 +523,11 @@ function process_response(str, job_id, json_response)
 end
 
 M.select_model = function()
-    local models = M.list_models()
+    local models = M.backend:list_models()
     vim.ui.select(models, {prompt = "Model:"}, function(item, idx)
         if item ~= nil then
             print("Model set to " .. item)
-            M.model = item
+            M.backend.model = item
         end
     end)
 end
