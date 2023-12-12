@@ -3,9 +3,10 @@ local M = {
     backends = {
         ollama = require("nopilot.ollama"),
 --        exllama = require("nopilot.exllama"),
+        openai = require("nopilot.openai"),
     },
     options = {
-        backend = "ollama"  -- Default backend
+        backend = "openai"  -- Default backend
     },
     session = {}
 }
@@ -29,13 +30,20 @@ local function trim_table(tbl)
 end
 
 local default_options = {
+--    backend = {
+--        name = "ollama",
+--        config = {
+--            host = "localhost",
+--            port = 11434,
+--            model = "mistral",
+--            -- init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
+--        }
+--    },
     backend = {
-        name = "ollama",
+        name = "openai",
         config = {
-            host = "localhost",
-            port = 11434,
-            model = "mistral",
-            -- init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
+            host = "api.openai.com",
+            model = "gpt-3.5-turbo",
         }
     },
     debug = false,
@@ -223,7 +231,11 @@ M.exec = function(options)
     add_user_message_to_session(prompt)
 
     M.result_string = ""
-    local cmd = M.backend:build_cmd(prompt, M.context, opts)
+    if M.backend.use_messages then
+        local cmd = M.backend:build_cmd(M.session, opts)
+    else
+        local cmd = M.backend:build_cmd(prompt, M.context, opts)
+    end
 
     if M.context ~= nil then write_to_buffer({"", "", "---", ""}) end
 
