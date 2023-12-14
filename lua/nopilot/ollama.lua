@@ -9,6 +9,7 @@ function ollama.new(config)
         generate = config.path or "/api/generate",
         tags = config.path or "/api/tags",
         model = config.model,
+        use_messages = false,
     }
 
     function self:list_models()

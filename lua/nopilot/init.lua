@@ -41,10 +41,10 @@ local default_options = {
 --    },
     backend = {
         name = "openai",
-        config = {
-            host = "api.openai.com",
-            model = "gpt-3.5-turbo",
-        }
+        -- config = {
+        --     host = "api.openai.com",
+        --     model = "gpt-3.5-turbo",
+        -- }
     },
     debug = false,
     show_prompt = false,
@@ -169,6 +169,12 @@ local function reset()
     M.session = {}
 end
 
+M.set_temperature = function(temperature)
+    -- validate
+    -- temperature is integer between 0-2
+    M.options.temperature = temperature
+end
+
 M.exec = function(options)
     local opts = vim.tbl_deep_extend("force", M, options)
 
@@ -196,9 +202,9 @@ M.exec = function(options)
     local function substitute_placeholders(input)
         if not input then return end
         local text = input
-        if string.find(text, "%$input") then
+        if string.find(text, "%$user") then
             local answer = vim.fn.input("Prompt: ")
-            text = string.gsub(text, "%$input", answer)
+            text = string.gsub(text, "%$user", answer)
         end
 
         if string.find(text, "%$register") then
@@ -211,7 +217,7 @@ M.exec = function(options)
         end
 
         content = string.gsub(content, "%%", "%%%%")
-        text = string.gsub(text, "%$text", content)
+        text = string.gsub(text, "%$visual", content)
         text = string.gsub(text, "%$filetype", vim.bo.filetype)
         return text
     end
@@ -231,10 +237,11 @@ M.exec = function(options)
     add_user_message_to_session(prompt)
 
     M.result_string = ""
+    local cmd = ""
     if M.backend.use_messages then
-        local cmd = M.backend:build_cmd(M.session, opts)
+        cmd = M.backend:build_cmd(M.session, opts)
     else
-        local cmd = M.backend:build_cmd(prompt, M.context, opts)
+        cmd = M.backend:build_cmd(prompt, M.context, opts)
     end
 
     if M.context ~= nil then write_to_buffer({"", "", "---", ""}) end
@@ -270,7 +277,6 @@ M.exec = function(options)
         end
         M.result_string = ""  -- Reset for next use
     end
-
 
     local job_id = vim.fn.jobstart(cmd, {
         -- stderr_buffered = opts.debug,
