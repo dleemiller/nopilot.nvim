@@ -234,7 +234,9 @@ M.exec = function(options)
     prompt = string.gsub(prompt, "%%", "%%%%")
 
     -- Add the formatted user message to the session.
-    add_user_message_to_session(prompt)
+    if M.backend.use_messages then
+        add_user_message_to_session(prompt)
+    end
 
     M.result_string = ""
     local cmd = ""
@@ -272,7 +274,9 @@ M.exec = function(options)
                 string.sub(trimmed_response_text, 1, #trimmed_last_content) == trimmed_last_content then
                 last_response.content = response_text  -- Update only if necessary
             else
-                add_assistant_message_to_session(response_text)  -- Add if no match
+                if M.backend.use_messages then
+                    add_assistant_message_to_session(response_text)  -- Add if no match
+                end
             end
         end
         M.result_string = ""  -- Reset for next use
