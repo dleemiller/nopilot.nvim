@@ -10,6 +10,9 @@ Development in progress...
 - Use visual select in buffer window and hit 't' for new tab
 ## Added (2023/12/10):
 - Abstract ollama backend
+## Added (2023/12/15):
+- Compatibility with openai (testing compatible backends soon)
+
 
 ## Requires
 
