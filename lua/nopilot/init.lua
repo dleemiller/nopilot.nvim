@@ -3,10 +3,12 @@ local M = {
     backends = {
         ollama = require("nopilot.ollama"),
 --        exllama = require("nopilot.exllama"),
+        openai = require("nopilot.openai"),
     },
     options = {
-        backend = "ollama"  -- Default backend
-    }
+        backend = "openai"  -- Default backend
+    },
+    session = {}
 }
 
 local curr_buffer = nil
@@ -28,14 +30,21 @@ local function trim_table(tbl)
 end
 
 local default_options = {
+--    backend = {
+--        name = "ollama",
+--        config = {
+--            host = "localhost",
+--            port = 11434,
+--            model = "mistral",
+--            -- init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
+--        }
+--    },
     backend = {
-        name = "ollama",
-        config = {
-            host = "localhost",
-            port = 11434,
-            model = "mistral",
-            -- init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
-        }
+        name = "openai",
+        -- config = {
+        --     host = "api.openai.com",
+        --     model = "gpt-3.5-turbo",
+        -- }
     },
     debug = false,
     show_prompt = false,
@@ -90,6 +99,28 @@ local function get_window_options()
     }
 end
 
+local function add_user_message_to_session(prompt)
+    table.insert(M.session, {role = "user", content = prompt})
+end
+
+local function add_assistant_message_to_session(response)
+    table.insert(M.session, {role = "assistant", content = response})
+end
+
+function M.reset_session()
+    M.session = {}
+end
+
+-- Expose the session for external access.
+function M.get_session()
+    return M.session
+end
+
+-- Expose a method to serialize the session to JSON.
+function M.session_to_json()
+    return vim.fn.json_encode(M.session)
+end
+
 local function write_to_buffer(lines)
     if not M.result_buffer or not vim.api.nvim_buf_is_valid(M.result_buffer) then
         return
@@ -135,6 +166,13 @@ local function reset()
     M.float_win = nil
     M.result_string = ""
     M.context = nil
+    M.session = {}
+end
+
+M.set_temperature = function(temperature)
+    -- validate
+    -- temperature is integer between 0-2
+    M.options.temperature = temperature
 end
 
 M.exec = function(options)
@@ -164,9 +202,9 @@ M.exec = function(options)
     local function substitute_placeholders(input)
         if not input then return end
         local text = input
-        if string.find(text, "%$input") then
+        if string.find(text, "%$user") then
             local answer = vim.fn.input("Prompt: ")
-            text = string.gsub(text, "%$input", answer)
+            text = string.gsub(text, "%$user", answer)
         end
 
         if string.find(text, "%$register") then
@@ -179,7 +217,7 @@ M.exec = function(options)
         end
 
         content = string.gsub(content, "%%", "%%%%")
-        text = string.gsub(text, "%$text", content)
+        text = string.gsub(text, "%$visual", content)
         text = string.gsub(text, "%$filetype", vim.bo.filetype)
         return text
     end
@@ -195,10 +233,21 @@ M.exec = function(options)
 
     prompt = string.gsub(prompt, "%%", "%%%%")
 
-    M.result_string = ""
-    local cmd = M.backend:build_cmd(prompt, M.context, opts)
+    -- Add the formatted user message to the session.
+    if M.backend.use_messages then
+        add_user_message_to_session(prompt)
+    end
 
-    if M.context ~= nil then write_to_buffer({"", "", "---", ""}) end
+    M.result_string = ""
+    local cmd = ""
+    if M.backend.use_messages then
+        cmd = M.backend:build_cmd(M.session, opts)
+    else
+        cmd = M.backend:build_cmd(prompt, M.context, opts)
+    end
+    print(cmd)
+
+    if M.context ~= nil or M.session then write_to_buffer({"", "", "---", ""}) end
 
     local partial_data = ""
     if opts.debug then print(cmd) end
@@ -211,10 +260,30 @@ M.exec = function(options)
         end
     end
 
+    -- This function will be called when job finishes to process the entire response
+    local function process_full_assistant_response(job_id)
+        local response_text = M.result_string
+        if response_text and response_text ~= "" then
+            local last_response = M.session[#M.session]
+
+            -- Trim whitespace from both strings to avoid false negatives on this check
+            local trimmed_last_content = last_response.content and string.match(last_response.content, "^%s*(.-)%s*$") or ""
+            local trimmed_response_text = string.match(response_text, "^%s*(.-)%s*$")
+
+            -- Check if the last assistant message is a prefix of the full message
+            if last_response and last_response.role == "assistant" and
+                string.sub(trimmed_response_text, 1, #trimmed_last_content) == trimmed_last_content then
+                last_response.content = response_text  -- Update only if necessary
+            else
+                if M.backend.use_messages then
+                    add_assistant_message_to_session(response_text)  -- Add if no match
+                end
+            end
+        end
+    end
+
     local job_id = vim.fn.jobstart(cmd, {
-        -- stderr_buffered = opts.debug,
         on_stdout = function(_, data, _)
-            -- window was closed, so cancel the job
             if not M.float_win or not vim.api.nvim_win_is_valid(M.float_win) then
                 if job_id then vim.fn.jobstop(job_id) end
                 if M.result_buffer then
@@ -224,25 +293,22 @@ M.exec = function(options)
                 return
             end
 
-            for _, line in ipairs(data) do
-                partial_data = partial_data .. line
-                if line:sub(-1) == "}" then
-                    partial_data = partial_data .. "\n"
-                end
+            -- Use parse_data() to handle the incoming data
+            -- write to buffer
+            local partial_text, context, is_complete = M.backend:parse_data(data, {json_response = opts.json_response})
+            if partial_text then
+                M.result_string = M.result_string .. partial_text
+                write_to_buffer({partial_text})
             end
 
-            local lines = vim.split(partial_data, "\n", {trimempty = true})
-
-            partial_data = table.remove(lines) or ""
-
-            for _, line in ipairs(lines) do
-                process_response(line, job_id, opts.json_response)
+            -- if not using messages, then we provide as context
+            if context ~= nil and not M.backend.use_messages then
+                M.context = context
             end
 
-            if partial_data:sub(-1) == "}" then
-                process_response(partial_data, job_id, opts.json_response)
-                partial_data = ""
-            end
+            -- if is_complete then
+            --     write_to_buffer({"", "===== COMPLETE ====", ""})
+            -- end
         end,
         on_stderr = function(_, data, _)
             if opts.debug then
@@ -254,54 +320,61 @@ M.exec = function(options)
 
                 if data == nil or #data == 0 then return end
 
-                M.result_string = M.result_string .. table.concat(data, "\n")
-                local lines = vim.split(M.result_string, "\n")
-                write_to_buffer(lines)
+                write_to_buffer({data})
             end
         end,
-        on_exit = function(a, b)
-            if b == 0 and opts.replace and M.result_buffer then
-                local lines = {}
-                if extractor then
-                    local extracted = M.result_string:match(extractor)
-                    if not extracted then
-                        if not opts.no_auto_close then
-                            -- Close the floating window if it's valid
-                            if M.float_win and vim.api.nvim_win_is_valid(M.float_win) then
-                                vim.api.nvim_win_hide(M.float_win)
-                            end
-
-                            -- Ensure that the buffer ID is valid before attempting to delete
-                            if M.result_buffer and vim.api.nvim_buf_is_valid(M.result_buffer) then
-                                vim.api.nvim_buf_delete(M.result_buffer, {force = true})
-                            else
-                                print("Error: Invalid buffer ID for deletion.")
-                            end
-                            reset()
-                        end
-                        return
-                    end
-                    lines = vim.split(extracted, "\n", true)
-                else
-                    lines = vim.split(M.result_string, "\n", true)
+        on_exit = function(job_id, exit_code)
+            if exit_code == 0 then  -- Check that the job completed successfully
+                -- Process the full assistant response before any text replacement
+                if M.backend.use_messages then
+                    process_full_assistant_response(job_id)
                 end
-                lines = trim_table(lines)
-                vim.api.nvim_buf_set_text(curr_buffer, start_pos[2] - 1,
-                                          start_pos[3] - 1, end_pos[2] - 1,
-                                          end_pos[3] - 1, lines)
-                if not opts.no_auto_close then
-                    -- Close the floating window if it's valid
-                    if M.float_win and vim.api.nvim_win_is_valid(M.float_win) then
-                        vim.api.nvim_win_hide(M.float_win)
-                    end
 
-                    -- Ensure that the buffer ID is valid before attempting to delete
-                    if M.result_buffer and vim.api.nvim_buf_is_valid(M.result_buffer) then
-                        vim.api.nvim_buf_delete(M.result_buffer, {force = true})
+                -- Continue with the text replacement and buffer management
+                if opts.replace and M.result_buffer then
+                    local lines = {}
+
+                    if extractor then
+                        local extracted = M.result_string:match(extractor)
+                        if not extracted then
+                            if not opts.no_auto_close then
+                                -- Close the floating window if it's valid
+                                if M.float_win and vim.api.nvim_win_is_valid(M.float_win) then
+                                    vim.api.nvim_win_hide(M.float_win)
+                                end
+
+                                -- Ensure that the buffer ID is valid before attempting to delete
+                                if M.result_buffer and vim.api.nvim_buf_is_valid(M.result_buffer) then
+                                    vim.api.nvim_buf_delete(M.result_buffer, {force = true})
+                                else
+                                    print("Error: Invalid buffer ID for deletion.")
+                                end
+                                reset()
+                            end
+                            return
+                        end
+                        lines = vim.split(extracted, "\n", true)
                     else
-                        print("Error: Invalid buffer ID for deletion.")
+                        lines = vim.split(M.result_string, "\n", true)
                     end
-                    reset()
+                    lines = trim_table(lines)
+                    vim.api.nvim_buf_set_text(curr_buffer, start_pos[2] - 1,
+                                              start_pos[3] - 1, end_pos[2] - 1,
+                                              end_pos[3] - 1, lines)
+                    if not opts.no_auto_close then
+                        -- Close the floating window if it's valid
+                        if M.float_win and vim.api.nvim_win_is_valid(M.float_win) then
+                            vim.api.nvim_win_hide(M.float_win)
+                        end
+
+                        -- Ensure that the buffer ID is valid before attempting to delete
+                        if M.result_buffer and vim.api.nvim_buf_is_valid(M.result_buffer) then
+                            vim.api.nvim_buf_delete(M.result_buffer, {force = true})
+                        else
+                            print("Error: Invalid buffer ID for deletion.")
+                        end
+                        reset()
+                    end
                 end
             end
             M.result_string = ""
@@ -483,33 +556,6 @@ end, {
     end
 })
 
-function process_response(str, job_id, json_response)
-    if string.len(str) == 0 then return end
-    local text
-
-    if json_response then
-        local success, result = pcall(function()
-            return vim.fn.json_decode(str)
-        end)
-
-        if success then
-            text = result.response
-            if result.context ~= nil then M.context = result.context end
-        else
-            write_to_buffer({"", "====== ERROR ====", str, "-------------", ""})
-            vim.fn.jobstop(job_id)
-        end
-    else
-        text = str
-    end
-
-    if text == nil then return end
-
-    M.result_string = M.result_string .. text
-    local lines = vim.split(text, "\n")
-    write_to_buffer(lines)
-
-end
 
 M.select_model = function()
     local models = M.backend:list_models()
