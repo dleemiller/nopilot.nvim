@@ -45,11 +45,13 @@ Example with Lazy
                 model = "deepseek-coder:6.7b-instruct-q6_K"
             }
         },
+        backend = {
+            name = "openai"
+        },
         display_mode = "float", -- The display mode. Can be "float" or "split".
         show_prompt = false, -- Shows the Prompt submitted to Ollama.
         show_model = false, -- Displays which model you are using at the beginning of your chat session.
         no_auto_close = false, -- Never closes the window automatically.
-        init = function(options) pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
         debug = false -- Prints errors and the command which is run.
     }
 },
@@ -115,9 +117,9 @@ require('nopilot').prompts['complete'] = {
 You can use the following properties per prompt:
 
 - `prompt`: (string | function) Prompt either as a string or a function which should return a string. The result can use the following placeholders:
-   - `$text`: Visually selected text
+   - `$visual`: Visually selected text
    - `$filetype`: Filetype of the buffer (e.g. `javascript`)
-   - `$input`: Additional user input
+   - `$user`: Additional user input
    - `$register`: Value of the unnamed register (yanked text)
 - `replace`: `true` if the selected text shall be replaced with the generated output
 - `extract`: Regular expression used to extract the generated result
