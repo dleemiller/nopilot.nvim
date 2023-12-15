@@ -45,9 +45,9 @@ Example with Lazy
                 model = "deepseek-coder:6.7b-instruct-q6_K"
             }
         },
-        backend = {
-            name = "openai"
-        },
+        -- backend = {
+        --     name = "openai"
+        -- },
         display_mode = "float", -- The display mode. Can be "float" or "split".
         show_prompt = false, -- Shows the Prompt submitted to Ollama.
         show_model = false, -- Displays which model you are using at the beginning of your chat session.
