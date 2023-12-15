@@ -16,6 +16,7 @@ function openai.new(config)
             ["Authorization"] = string.format("Bearer %s", os.getenv("OPENAI_API_KEY") or ""),
         },
         use_messages = true,
+        partial_data = "",
     }
 
     function self:list_models()
@@ -28,65 +29,75 @@ function openai.new(config)
 
     function self:build_cmd(messages, opts)
         opts = opts or {}
-        local url = "https://" .. self.host
-        if self.port and self.port ~= "" then
-            url = url .. ":" .. self.port
-        end
-        url = url .. self.api
+        local url = "https://" .. self.host .. (self.port and self.port ~= "" and ":" .. self.port or "") .. self.api
+        local cmd = 'curl ' .. url .. ' '
 
-        -- Initialize curl command with POST method and URL
-        local cmd = 'curl -X POST "' .. url .. '" '
-
-        -- Iterate over headers in self
         for key, value in pairs(self.headers) do
-            -- Add each header to the curl command as a separate -H option
             cmd = cmd .. '-H "' .. key .. ': ' .. value .. '" '
         end
 
-        -- Add the data to the curl command
-        cmd = cmd .. '-d $body'
+        local body = {
+            model = self.model,
+            messages = messages,
+            stream = opts.stream or true
+        }
 
-        local function is_table_empty(t)
-            if t == nil or next(t) == nil then
-                return true
-            else
-                return false
+        for _, param in ipairs({"suffix", "max_tokens", "temperature", "top_p", "n", "stop", "presence_penalty", "frequency_penalty", "logit_bias"}) do
+            if opts.options[param] ~= nil then
+                body[param] = opts.options[param]
             end
         end
 
-        if string.find(cmd, "%$body") then
-            local body = {
-                model = self.model,
-                messages = messages,
-                stream = opts.stream or true
-            }
+        local json = vim.fn.json_encode(body)
+        json = vim.fn.shellescape(json)
+        cmd = cmd .. '-d ' .. json
 
-            -- Initialize an empty table for options
-            local options = {}
+        return cmd
+    end
 
-            -- Loop through optional parameters and include them if they were set in the opts
-            local optional_params = {
-                "model", "prompt", "suffix", "max_tokens", "temperature",
-                "top_p", "n", "stream", "stop", "presence_penalty",
-                "frequency_penalty", "logit_bias"
-            }
-            for _, param in ipairs(optional_params) do
-                if opts.options[param] ~= nil then
-                    options[param] = opts.options[param]
+    function self:parse_data(data, opts)
+        local partial_text = ""
+        local is_complete = false
+        local context = nil
+
+        local buffer = self.partial_data  -- Use buffer to accumulate JSON data
+        for _, line in ipairs(data) do
+            -- check for done string
+            if line == "data: [DONE]" then
+                buffer = ""
+                is_complete = true
+            else
+                -- Remove "data: " prefix and append the line to the buffer
+                local json_str = line:gsub("^data: ", "")
+                buffer = buffer .. json_str
+
+
+                local success, json = pcall(vim.fn.json_decode, buffer)
+                if success and type(json) == "table" and json.choices and json.choices[1] and json.choices[1].delta then
+                    local delta = json.choices[1].delta
+                    if delta.content then
+                        partial_text = partial_text .. delta.content
+                    end
+
+                    buffer = ""  -- Reset the buffer after processing a complete JSON chunk
+
+                    -- Check for the completion condition based on 'finish_reason'
+                    if json.choices[1].finish_reason == "stop" then
+                        is_complete = true
+                    end
+
+                    -- Update context if it exists
+                    if json.context ~= nil then
+                        context = json.context
+                    end
                 end
             end
-
-            -- Add options to the body only if options are not empty
-            if not is_table_empty(options) then
-                body.options = options
-            end
-
-            -- Encode to JSON and shell-escape
-            local json = vim.fn.json_encode(body)
-            json = vim.fn.shellescape(json)
-            cmd = string.gsub(cmd, "%$body", json)
         end
-        return cmd
+
+        -- Update partial_data with the remaining buffer content
+        self.partial_data = buffer
+
+        return partial_text, context, is_complete
     end
 
     return self

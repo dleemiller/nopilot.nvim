@@ -10,6 +10,7 @@ function ollama.new(config)
         tags = config.path or "/api/tags",
         model = config.model,
         use_messages = false,
+        partial_data = "",
     }
 
     function self:list_models()
@@ -84,7 +85,38 @@ function ollama.new(config)
         return cmd
     end
 
+    function self:parse_data(data, opts)
+        local partial_text = ""
+        local is_complete = false
+        local context = nil
+
+        local buffer = self.partial_data  -- Use buffer to accumulate JSON data
+        for _, line in ipairs(data) do
+            buffer = buffer .. line  -- Append each line to the buffer
+
+            local success, json = pcall(vim.fn.json_decode, buffer)
+            if success and type(json) == "table" and json.response then
+                partial_text = partial_text .. json.response
+                buffer = ""  -- Reset the buffer after processing a complete JSON object
+                if json.done then
+                    is_complete = true
+                end
+                if json.context ~= nil then
+                    context = json.context
+                end
+            end
+        end
+
+        -- Update partial_data with the remaining buffer content
+        -- This is for cases where the last JSON object is not complete
+        self.partial_data = buffer
+
+        -- Return the current partial data and any error message
+        return partial_text, context, is_complete
+    end
+
     return self
 end
+
 
 return ollama
