@@ -12,7 +12,10 @@ Development in progress...
 - Abstract ollama backend
 ## Added (2023/12/15):
 - Compatibility with openai (testing compatible backends soon)
-
+- User commands
+    `:SetTemperature ...` - set the temperature on the fly
+    `:SelectModel` - select the model to use
+    `:DisplayBackendConfig` - show the configuration of the backend
 
 ## Requires
 
@@ -71,7 +74,7 @@ require('nopilot').setup({
 
 ## Usage
 
-Use command `Np` to generate text based on predefined and customizable prompts.
+Use command `No` to generate text based on predefined and customizable prompts.
 
 Example key maps:
 
@@ -82,13 +85,13 @@ vim.keymap.set({ 'n', 'v' }, '<leader>]', ':<CR>')
 You can also directly invoke it with one of the [predefined prompts](./lua/nopilot/prompts.lua):
 
 ```lua
-vim.keymap.set('v', '<leader>]', ':Np alter<CR>')
+vim.keymap.set('v', '<leader>]', ':No alter<CR>')
 ```
 
 Once a conversation is started, the whole context is sent to the LLM. That allows you to ask follow-up questions with
 
 ```lua
-:Np chat
+:No chat
 ```
 
 and once the window is closed, you start with a fresh conversation.

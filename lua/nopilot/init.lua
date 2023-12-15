@@ -12,6 +12,7 @@ local M = {
 }
 
 local curr_buffer = nil
+local original_buffer = nil
 local start_pos = nil
 local end_pos = nil
 
@@ -29,23 +30,21 @@ local function trim_table(tbl)
     return tbl
 end
 
-local default_options = {
---    backend = {
---        name = "ollama",
---        config = {
---            host = "localhost",
---            port = 11434,
---            model = "mistral",
---            -- init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
---        }
---    },
-    backend = {
-        name = "openai",
-        -- config = {
-        --     host = "api.openai.com",
-        --     model = "gpt-3.5-turbo",
-        -- }
+local backend_defaults = {
+    ollama = {
+        host = "localhost",
+        port = 11434,
+        model = "mistral",
+        -- Other default config options for ollama
     },
+    openai = {
+        host = "api.openai.com",
+        model = "gpt-3.5-turbo",
+        -- Other default config options for OpenAI
+    }
+}
+
+local default_options = {
     debug = false,
     show_prompt = false,
     show_model = false,
@@ -53,15 +52,37 @@ local default_options = {
     display_mode = "float",
     no_auto_close = false,
 }
-for k, v in pairs(default_options) do M[k] = v end
-function M.setup(opts)
-    for k, v in pairs(opts) do M[k] = v end
 
-    -- Select the backend based on the options
-    local name = opts.backend.name
-    if M.backends[name] then
-        local config = opts.backend.config or {}
-        M.backend = M.backends[name].new(config)
+for k, v in pairs(default_options) do M[k] = v end
+
+function M.setup(opts)
+    opts = opts or {}
+
+    -- Apply top-level user options
+    for k, v in pairs(opts) do
+        M[k] = v
+    end
+
+    -- Determine the backend name
+    local backend_name = opts.backend.name or M.options.backend  -- This is a string
+
+    -- Check if the backend name is valid and get the default configuration
+    local default_config = backend_defaults[backend_name]
+    if not default_config then
+        error("Unknown backend: " .. backend_name)
+    end
+
+    -- If user provided a backend configuration, merge it with the defaults
+    local backend_config
+    if opts.backend.config then
+        backend_config = vim.tbl_deep_extend("force", default_config, opts.backend.config)
+    else
+        backend_config = default_config
+    end
+
+    -- Initialize the selected backend with the merged configuration
+    if M.backends[backend_name] then
+        M.backend = M.backends[backend_name].new(backend_config)
     else
         error("Unknown backend: " .. backend_name)
     end
@@ -169,11 +190,6 @@ local function reset()
     M.session = {}
 end
 
-M.set_temperature = function(temperature)
-    -- validate
-    -- temperature is integer between 0-2
-    M.options.temperature = temperature
-end
 
 M.exec = function(options)
     local opts = vim.tbl_deep_extend("force", M, options)
@@ -181,6 +197,11 @@ M.exec = function(options)
     if type(M.backend.init) == 'function' then M.backend.init() end
 
     curr_buffer = vim.api.nvim_get_current_buf()
+    if M.float_win == nil then
+        original_buffer = vim.api.nvim_get_current_buf()
+    end
+    -- vim.notify("Current buffer ID: " .. curr_buffer .. " Original: " .. original_buffer, vim.log.levels.INFO)
+
     local mode = opts.mode or vim.fn.mode()
     if mode == "v" or mode == "V" then
         start_pos = vim.fn.getpos("'<")
@@ -245,7 +266,6 @@ M.exec = function(options)
     else
         cmd = M.backend:build_cmd(prompt, M.context, opts)
     end
-    print(cmd)
 
     if M.context ~= nil or M.session then write_to_buffer({"", "", "---", ""}) end
 
@@ -428,9 +448,14 @@ M.exec = function(options)
 
         -- Replace the original selection with the given text
         local function replace_original_selection(text)
+            if not vim.api.nvim_buf_is_valid(original_buffer) or
+               not vim.api.nvim_buf_get_option(original_buffer, 'modifiable') then
+                print("Error: Buffer is not valid or not modifiable.")
+                return
+            end
             -- Ensure that 'start_pos' and 'end_pos' are correctly set to the original visual selection in the 'curr_buffer'
             local trimmed_lines = vim.split(text, "\n", true)
-            vim.api.nvim_buf_set_text(curr_buffer, start_pos[2] - 1, start_pos[3]-1, end_pos[2] - 1, end_pos[3] - 1, trimmed_lines)
+            vim.api.nvim_buf_set_text(original_buffer, start_pos[2] - 1, start_pos[3]-1, end_pos[2] - 1, end_pos[3] - 1, trimmed_lines)
             -- vim.api.nvim_set_lines(curr_buffer, start_pos[2] - 1, end_pos[2], trimmed_lines)
         end
 
@@ -520,7 +545,7 @@ function select_prompt(cb)
     }, function(item, idx) cb(item) end)
 end
 
-vim.api.nvim_create_user_command("Np", function(arg)
+vim.api.nvim_create_user_command("No", function(arg)
     local mode
     if arg.range == 0 then
         mode = "n"
@@ -556,15 +581,59 @@ end, {
     end
 })
 
-
+-- This function allows you to select a model from a list
 M.select_model = function()
+    -- List all available models
     local models = M.backend:list_models()
-    vim.ui.select(models, {prompt = "Model:"}, function(item, idx)
-        if item ~= nil then
-            print("Model set to " .. item)
-            M.backend.model = item
+
+    -- Use vim's built-in UI selection function
+    vim.ui.select(models, {prompt = "Model:"}, function(selectedModel, selectedIndex)
+        if selectedModel ~= nil then
+            print(" Model set to " .. selectedModel)
+
+            -- Attempt to change the model and handle any potential errors
+            local success, errorMessage = pcall(function()
+                M.backend.model = selectedModel
+            end)
+
+            if not success then
+                print(" An error occurred: " .. errorMessage)
+            end
         end
     end)
 end
+
+-- Define a new user command to select a model from the list
+vim.api.nvim_create_user_command('SelectModel', function()
+    M.select_model();
+end, { nargs = 0 })
+
+M.set_temperature = function(temperature)
+    assert(type(temperature) == "number" and temperature >= 0 and temperature <= 2, "Temperature must be a number between 0 and 2")
+    M.options.temperature = temperature
+    vim.notify("Temperature set to " .. temperature)
+end
+
+vim.api.nvim_create_user_command('SetTemperature', function(args)
+    local arg_list = vim.split(args.args, " ")
+    local temperature = tonumber(arg_list[1])
+    if temperature then
+        M.set_temperature(temperature)
+    else
+        vim.notify("Invalid input: " .. arg_list[1], vim.log.levels.ERROR)
+    end
+end, { nargs = 1 })
+
+function M.display_backend_config()
+    if M.backend then
+        local config_str = vim.inspect(M.backend)
+        print("Current Backend Configuration:\n" .. config_str)
+    else
+        print("No backend configuration available.")
+    end
+end
+
+vim.api.nvim_create_user_command('DisplayBackendConfig', M.display_backend_config, {})
+
 
 return M
