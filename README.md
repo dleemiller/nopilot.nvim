@@ -13,8 +13,11 @@ Development in progress...
 ## Added (2023/12/15):
 - Compatibility with openai (testing compatible backends soon)
 - User commands
+  
     `:SetTemperature ...` - set the temperature on the fly
+  
     `:SelectModel` - select the model to use
+  
     `:DisplayBackendConfig` - show the configuration of the backend
 
 ## Requires
