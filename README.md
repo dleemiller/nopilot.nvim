@@ -1,132 +1,97 @@
 # nopilot.nvim
 
-A fork of the teriffic plugin from David-Kunz `gen.nvim`.
+`nopilot.nvim` is a Neovim plugin designed for integration with language models, enhancing coding and documentation workflows. It's a fork of David-Kunz's `gen.nvim`, enriched with additional features and capabilities. Nopilot currently has backend support for `ollama` and `openai` streaming backends, and aims to add more in the future.
 
-Development in progress...
+## Getting Started
 
-## Added features (2023/12/09):
-- Add API options
-- Use visual select in buffer window and hit enter for replace
-- Use visual select in buffer window and hit 't' for new tab
-## Added (2023/12/10):
-- Abstract ollama backend
-## Added (2023/12/15):
-- Compatibility with openai (testing compatible backends soon)
-- User commands
-  
-    `:SetTemperature ...` - set the temperature on the fly
-  
-    `:SelectModel` - select the model to use
-  
-    `:DisplayBackendConfig` - show the configuration of the backend
+### Quick Installation
 
-## Requires
-
-- [Ollama](https://ollama.ai/) with an appropriate model, e.g. [`mistral`](https://ollama.ai/library/mistral) or [`zephyr`](https://ollama.ai/library/zephyr) (customizable)
-- [Curl](https://curl.se/)
-
-## Install
-
-Install with your favorite plugin manager, e.g. [lazy.nvim](https://github.com/folke/lazy.nvim)
-
-Example with Lazy
+Install `nopilot.nvim` using your favorite plugin manager. For example, with [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
--- Minimal configuration
-{ "dleemiller/nopilot.nvim" },
-
+{ "dleemiller/nopilot.nvim" }
 ```
 
-```lua
+This sets up `nopilot.nvim` with default options, including the `openai` backend.
 
--- Custom Parameters (with defaults)
+## Advanced Installation
+
+Customize your setup with specific backend options:
+
+### OpenAI Backend
+
+```lua
+{
+    "dleemiller/nopilot.nvim",
+    opts = {
+        backend = {
+            name = "openai",
+            config = {
+                host = "api.openai.com",
+                model = "gpt-3.5-turbo",
+                temperature = 0.7,
+                max_tokens = 150,
+                // Other configurations...
+            }
+        },
+        // Other options...
+    }
+}
+```
+
+Note: Set your OpenAI API key in the `OPENAI_API_KEY` environment variable or provide headers with your API key in the configuration.
+
+### Ollama Backend
+
+```lua
 {
     "dleemiller/nopilot.nvim",
     opts = {
         backend = {
             name = "ollama",
             config = {
-                host = "flint",
-                port = 11434,
-                model = "deepseek-coder:6.7b-instruct-q6_K"
+                host = "localhost",
+                port = "11434",
+                model = "your-model-name",
+                // Other configurations...
             }
         },
-        -- backend = {
-        --     name = "openai"
-        -- },
-        display_mode = "float", -- The display mode. Can be "float" or "split".
-        show_prompt = false, -- Shows the Prompt submitted to Ollama.
-        show_model = false, -- Displays which model you are using at the beginning of your chat session.
-        no_auto_close = false, -- Never closes the window automatically.
-        debug = false -- Prints errors and the command which is run.
+        // Other options...
     }
-},
-```
-
-Here are all [available models](https://ollama.ai/library).
-
-Alternatively, you can call the `setup` function:
-
-```lua
-require('nopilot').setup({
-  -- same as above
-})
-```
-
-
-
-## Usage
-
-Use command `No` to generate text based on predefined and customizable prompts.
-
-Example key maps:
-
-```lua
-vim.keymap.set({ 'n', 'v' }, '<leader>]', ':<CR>')
-```
-
-You can also directly invoke it with one of the [predefined prompts](./lua/nopilot/prompts.lua):
-
-```lua
-vim.keymap.set('v', '<leader>]', ':No alter<CR>')
-```
-
-Once a conversation is started, the whole context is sent to the LLM. That allows you to ask follow-up questions with
-
-```lua
-:No chat
-```
-
-and once the window is closed, you start with a fresh conversation.
-
-You can select a model from a list of all installed models with
-
-```lua
-require('nopilot').select_model()
-```
-
-## Custom Prompts
-
-All prompts are defined in `require('nopilot').prompts`, you can enhance or modify them.
-
-Example:
-```lua
-require('nopilot').prompts['complete'] = {
-  prompt = "Complete the following code. Only ouput the result in format ```$filetype\n...\n```:\n```$filetype\n$text\n```",
-  replace = false,
-  options = {
-    temperature = 0.1
-  }
 }
 ```
 
-You can use the following properties per prompt:
+## Features
 
-- `prompt`: (string | function) Prompt either as a string or a function which should return a string. The result can use the following placeholders:
-   - `$visual`: Visually selected text
-   - `$filetype`: Filetype of the buffer (e.g. `javascript`)
-   - `$user`: Additional user input
-   - `$register`: Value of the unnamed register (yanked text)
-- `replace`: `true` if the selected text shall be replaced with the generated output
-- `extract`: Regular expression used to extract the generated result
-- `model`: The model to use, e.g. `zephyr`, default: `mistral`
+### User Interface
+- Visual highlight provides context into `$visual` parameter of prompts.
+- Use `$user` to provide custom prompt instructions.
+- Opens LLM responses in a new buffer window. Use `chat` to interact or provide further instruction.
+- Visual replacement: simply highlight and hit `enter` in the window to replace your original selections -- or press `t` to open in a new buffer tab.
+- `:SelectModel` opens a menu to change the model
+- `:SetTemperature 0.5` sets the temperature to 0.5
+- `:DisplayBackendConfig` shows the settings in of the model backend
+
+### Backend Configuration
+
+- **OpenAI Backend**: Customize settings like `host`, `port`, `api`, `model`, and `headers`.
+- **Ollama Backend**: Configure Ollama backend with parameters like `host`, `port`, and `model`.
+- **Model Selection**: Choose from models for both OpenAI and Ollama backends.
+- **Coming Soon**: Additional backends and hot-switching
+
+### Request Customization
+
+Customize the AI request for both backends with configurations such as `temperature`, `max_tokens`, and more.
+
+### Data Parsing and Streaming
+
+The plugin handles partial data and streams responses, ensuring efficient and real-time interaction with the AI.
+
+### Contributing
+
+Contributions are welcome. Please feel free to open issues or submit pull requests.
+
+---
+
+This plugin is under active development, and prompts, configurations and user interface are subject to change.
+Stay tuned for ongoing developments and updates in `nopilot.nvim`.
