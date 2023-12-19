@@ -14,6 +14,8 @@ Install `nopilot.nvim` using your favorite plugin manager. For example, with [la
 
 This sets up `nopilot.nvim` with default options, including the `openai` backend.
 
+Use the command `:No` to begin.
+
 ## Advanced Installation
 
 Customize your setup with specific backend options:
