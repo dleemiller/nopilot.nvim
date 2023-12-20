@@ -282,7 +282,7 @@ M.exec = function(options)
     end
 
     -- This function will be called when job finishes to process the entire response
-    local function process_full_assistant_response(job_id, has_output)
+    local function process_full_assistant_response(job_id)
         local response_text = M.result_string
         if response_text and response_text:match("%S") then
             local last_response = M.session[#M.session]
