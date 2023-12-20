@@ -70,19 +70,20 @@ function M.setup(opts)
         M.change_backend(M.options.user_backends[1].name, M.options.user_backends[1].config)
     else
         -- Handle single backend setup
-        local backend_name = opts.backend and opts.backend.name or M.options.default_backend_name
+        local backend_type = opts.backend and opts.backend.name or M.options.default_backend_name
         local user_config = opts.backend and opts.backend.config or {}
+        local backend_name = opts.backend and opts.backend.display_name or backend_type
 
         -- Convert single backend to the multiple backends format
         M.options.user_backends = {
             {
-                name = backend_name,
+                name = backend_type,
                 config = user_config,
-                display_name = backend_name -- or any other appropriate display name
+                display_name = backend_name
             }
         }
 
-        M.change_backend(backend_name, user_config)
+        M.change_backend(backend_type, user_config)
     end
 end
 
@@ -306,7 +307,7 @@ M.exec = function(options)
         not vim.api.nvim_win_is_valid(M.float_win) then
         create_window(opts)
         if opts.show_model then
-            write_to_buffer({"# Chat with " .. opts.model, ""})
+            write_to_buffer({"# Chat with " .. M.backend.model, ""})
         end
     end
 
