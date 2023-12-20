@@ -193,6 +193,7 @@ end
 
 M.exec = function(options)
     local opts = vim.tbl_deep_extend("force", M, options)
+    local has_output = false
 
     if type(M.backend.init) == 'function' then M.backend.init() end
 
@@ -283,7 +284,7 @@ M.exec = function(options)
     -- This function will be called when job finishes to process the entire response
     local function process_full_assistant_response(job_id)
         local response_text = M.result_string
-        if response_text and response_text ~= "" then
+        if response_text and response_text:match("%S") then
             local last_response = M.session[#M.session]
 
             -- Trim whitespace from both strings to avoid false negatives on this check
@@ -317,6 +318,10 @@ M.exec = function(options)
             -- write to buffer
             local partial_text, context, is_complete = M.backend:parse_data(data, {json_response = opts.json_response})
             if partial_text then
+                -- Check if partial_text contains non-whitespace characters
+                if partial_text:match("%S") then
+                    has_output = true
+                end
                 M.result_string = M.result_string .. partial_text
                 write_to_buffer({partial_text})
             end
@@ -331,20 +336,29 @@ M.exec = function(options)
             -- end
         end,
         on_stderr = function(_, data, _)
-            if opts.debug then
-                -- window was closed, so cancel the job
-                if not M.float_win or not vim.api.nvim_win_is_valid(M.float_win) then
-                    if job_id then vim.fn.jobstop(job_id) end
-                    return
+            -- Check if the floating window is valid and stop the job if it's not
+            if not M.float_win or not vim.api.nvim_win_is_valid(M.float_win) then
+                if job_id then vim.fn.jobstop(job_id) end
+                return
+            end
+
+            -- Check for data and write error messages to the buffer
+            if data then
+                for _, line in ipairs(data) do
+                    if line ~= "" then
+                        has_output = true  -- Mark that we have received output
+                        write_to_buffer({"Error: " .. line})
+                    end
                 end
-
-                if data == nil or #data == 0 then return end
-
-                write_to_buffer({data})
             end
         end,
         on_exit = function(job_id, exit_code)
-            if exit_code == 0 then  -- Check that the job completed successfully
+            if exit_code ~= 0 then
+                write_to_buffer({"Command failed with exit code: " .. exit_code})
+            elseif not has_output then
+                write_to_buffer({"No output received from the model."})
+            else
+            --if exit_code == 0 then  -- Check that the job completed successfully
                 -- Process the full assistant response before any text replacement
                 if M.backend.use_messages then
                     process_full_assistant_response(job_id)
@@ -533,37 +547,70 @@ end
 M.win_config = {}
 
 M.prompts = prompts
-function select_prompt(cb)
-    local promptKeys = {}
-    for key, _ in pairs(M.prompts) do table.insert(promptKeys, key) end
-    table.sort(promptKeys)
-    vim.ui.select(promptKeys, {
-        prompt = "Prompt:",
-        format_item = function(item)
-            return table.concat(vim.split(item, "_"), " ")
-        end
-    }, function(item, idx) cb(item) end)
+
+-- Function to determine inputs required by the prompt
+local function determineInputs(promptText)
+    local inputs = {}
+    if string.find(promptText, "%$user") then
+        table.insert(inputs, "u")
+    end
+    if string.find(promptText, "%$visual") then
+        table.insert(inputs, "v")
+    end
+    return table.concat(inputs, ", ")
 end
 
-vim.api.nvim_create_user_command("No", function(arg)
-    local mode
-    if arg.range == 0 then
-        mode = "n"
+-- Function to create display text for menu items
+local function createDisplayText(promptKey, promptText)
+    local inputs = determineInputs(promptText)
+    if inputs ~= "" then
+        return promptKey .. " [" .. inputs .. "]"
     else
-        mode = "v"
+        return promptKey
     end
+end
+
+-- Function to select a prompt
+function select_prompt(cb)
+    local menuItems = {}
+    for key, value in pairs(M.prompts) do
+        local item = {
+            name = key,
+            displayText = createDisplayText(key, value.prompt)
+        }
+        table.insert(menuItems, item)
+    end
+
+    table.sort(menuItems, function(a, b) return a.displayText < b.displayText end)
+    local displayTexts = vim.tbl_map(function(item) return item.displayText end, menuItems)
+
+    vim.ui.select(displayTexts, {
+        prompt = "Select a prompt:",
+        format_item = function(item) return item end
+    }, function(choice, idx)
+        if not choice then return end
+        local selectedItem = menuItems[idx]
+        if selectedItem then
+            cb(selectedItem.name)
+        end
+    end)
+end
+
+-- User command implementation
+vim.api.nvim_create_user_command("No", function(arg)
+    local mode = arg.range == 0 and "n" or "v"
     if arg.args ~= "" then
         local prompt = M.prompts[arg.args]
         if not prompt then
             print("Invalid prompt '" .. arg.args .. "'")
             return
         end
-        p = vim.tbl_deep_extend("force", {mode = mode}, prompt)
+        local p = vim.tbl_deep_extend("force", {mode = mode}, prompt)
         return M.exec(p)
     end
-    select_prompt(function(item)
-        if not item then return end
-        p = vim.tbl_deep_extend("force", {mode = mode}, M.prompts[item])
+    select_prompt(function(itemName)
+        if not itemName then return end
+        local p = vim.tbl_deep_extend("force", {mode = mode}, M.prompts[itemName])
         M.exec(p)
     end)
 end, {
