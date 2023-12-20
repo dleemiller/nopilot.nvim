@@ -27,6 +27,7 @@ Customize your setup with specific backend options:
     "dleemiller/nopilot.nvim",
     opts = {
         backend = {
+            display_name = "OpenAI GPT 3.5 Turbo",
             name = "openai",
             config = {
                 host = "api.openai.com",
@@ -50,7 +51,7 @@ Note: Set your OpenAI API key in the `OPENAI_API_KEY` environment variable or pr
     "dleemiller/nopilot.nvim",
     opts = {
         backend = {
-            display_name = "Ollama",
+            display_name = "Ollama etc.",
             name = "ollama",
             config = {
                 host = "localhost",
@@ -117,7 +118,8 @@ Note: Set your OpenAI API key in the `OPENAI_API_KEY` environment variable or pr
 - **OpenAI Backend**: Customize settings like `host`, `port`, `api`, `model`, and `headers`.
 - **Ollama Backend**: Configure Ollama backend with parameters like `host`, `port`, and `model`.
 - **Model Selection**: Choose from models for both OpenAI and Ollama backends.
-- **Coming Soon**: Additional backends and hot-switching
+- **Backend Selection**: Switch between Ollama and OpenAI on the fly
+- **Coming Soon**: Additional backends
 
 ### Request Customization
 
