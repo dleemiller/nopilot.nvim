@@ -50,6 +50,7 @@ Note: Set your OpenAI API key in the `OPENAI_API_KEY` environment variable or pr
     "dleemiller/nopilot.nvim",
     opts = {
         backend = {
+            display_name = "Ollama",
             name = "ollama",
             config = {
                 host = "localhost",
@@ -63,6 +64,42 @@ Note: Set your OpenAI API key in the `OPENAI_API_KEY` environment variable or pr
 }
 ```
 
+### Selectable backends
+
+```lua
+{
+    {
+        "dleemiller/nopilot.nvim",
+        opts = {
+            backends = {
+                {
+                    display_name = "Ollama deepseek 6.7b",
+                    name = "ollama",
+                    config = {
+                        host = "flint",
+                        port = 11434,
+                        model = "deepseek-coder:6.7b-instruct-q6_K"
+                    }
+                },
+                {
+                    display_name = "OpenAI GPT 3.5 Turbo",
+                    name = "openai",
+                    config = {
+                        model = "gpt-3.5-turbo"
+                    }
+                },
+            },
+            display_mode = "float", -- The display mode
+            show_prompt = false, -- Shows the Prompt
+            show_model = false, -- Displays which model you are using
+            no_auto_close = false, -- Never closes the window automatically
+            debug = false -- Prints errors and the command which is run
+        }
+    },
+    // Your other plugins
+}
+```
+
 ## Features
 
 ### User Interface
@@ -73,6 +110,7 @@ Note: Set your OpenAI API key in the `OPENAI_API_KEY` environment variable or pr
 - `:SelectModel` opens a menu to change the model
 - `:SetTemperature 0.5` sets the temperature to 0.5
 - `:DisplayBackendConfig` shows the settings in of the model backend
+- `:ChangeBackend` opens a menu to switch the model backend configuration
 
 ### Backend Configuration
 
