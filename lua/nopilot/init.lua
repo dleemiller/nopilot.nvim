@@ -1,12 +1,13 @@
 local prompts = require("nopilot.prompts")
 local M = {
-    backends = {
+    backend_modules = {
         ollama = require("nopilot.ollama"),
 --        exllama = require("nopilot.exllama"),
         openai = require("nopilot.openai"),
     },
     options = {
-        backend = "openai"  -- Default backend
+        default_backend_name = "openai",  -- Default backend
+        user_backends = {},
     },
     session = {}
 }
@@ -63,31 +64,59 @@ function M.setup(opts)
         M[k] = v
     end
 
-    -- Determine the backend name
-    local backend_name = opts.backend.name or M.options.backend  -- This is a string
-
-    -- Check if the backend name is valid and get the default configuration
-    local default_config = backend_defaults[backend_name]
-    if not default_config then
-        error("Unknown backend: " .. backend_name)
-    end
-
-    -- If user provided a backend configuration, merge it with the defaults
-    local backend_config
-    if opts.backend.config then
-        backend_config = vim.tbl_deep_extend("force", default_config, opts.backend.config)
+    -- Handle multiple backends configuration
+    if opts.backends and type(opts.backends) == "table" and #opts.backends > 0 then
+        M.options.user_backends = opts.backends
+        M.change_backend(M.options.user_backends[1].name, M.options.user_backends[1].config)
     else
-        backend_config = default_config
-    end
+        -- Handle single backend setup
+        local backend_name = opts.backend and opts.backend.name or M.options.default_backend_name
+        local user_config = opts.backend and opts.backend.config or {}
 
-    -- Initialize the selected backend with the merged configuration
-    if M.backends[backend_name] then
-        M.backend = M.backends[backend_name].new(backend_config)
-    else
-        error("Unknown backend: " .. backend_name)
+        -- Convert single backend to the multiple backends format
+        M.options.user_backends = {
+            {
+                name = backend_name,
+                config = user_config,
+                display_name = backend_name -- or any other appropriate display name
+            }
+        }
+
+        M.change_backend(backend_name, user_config)
     end
 end
 
+function M.change_backend(backend_type, user_config)
+    local default_config = backend_defaults[backend_type]
+    if not default_config then
+        error("Unknown backend: " .. backend_type)
+    end
+
+    local backend_config = vim.tbl_deep_extend("force", default_config, user_config or {})
+
+    if M.backend_modules[backend_type] then
+        M.backend = M.backend_modules[backend_type].new(backend_config)
+    else
+        error("Unknown backend: " .. backend_type)
+    end
+end
+
+vim.api.nvim_create_user_command('ChangeBackend', function()
+    if not M.options.user_backends or #M.options.user_backends == 0 then
+        print("No backends configured")
+        return
+    end
+
+    local backend_names = vim.tbl_map(function(backend) return backend.display_name end, M.options.user_backends)
+
+    vim.ui.select(backend_names, {prompt = "Select a Backend:"}, function(choice, idx)
+        if choice then
+            local selected_backend = M.options.user_backends[idx]
+            M.change_backend(selected_backend.name, selected_backend.config)
+            print("Switched to backend: " .. selected_backend.display_name)
+        end
+    end)
+end, { nargs = 0 })
 
 local function get_window_options()
     local width = math.floor(vim.o.columns * 0.9) -- 90% of the current editor's width
@@ -347,7 +376,7 @@ M.exec = function(options)
                 for _, line in ipairs(data) do
                     if line ~= "" then
                         has_output = true  -- Mark that we have received output
-                        write_to_buffer({"Error: " .. line})
+                        -- write_to_buffer({"Error: " .. line}) -- TODO: figure out how to do this safely
                     end
                 end
             end
