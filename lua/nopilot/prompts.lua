@@ -66,7 +66,7 @@ Add docstrings and type annotations to the following code:
 
 $visual
 
-Before adding documentation, describe the function's behavior and parameters in plain language. Then, use this description to create accurate and informative docstrings and type annotations. Remember to only respond with code inside a code block.
+Before adding documentation, describe the function's behavior and parameters in plain language. Then, use this description to create accurate and informative docstrings. For type annotations, only type annotate the function definitions.
         ]],
         replace = false,
         description = "documenting code with preliminary description",
