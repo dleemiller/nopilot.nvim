@@ -1,60 +1,92 @@
 return {
-    chat = { prompt = "$user" },
-    annotate = {
-        prompt = "Add type annotations, but do not change the code or indentation.\n\nHere is the code:\n$visual\n\nRemember to respond only with code inside a code block.",
-        replace = false,
-    },
+    alter = {
+      prompt = [[
+Here is a section of code that needs to be rewritten:
+$visual
 
-    docstring = {
-        prompt = "Add docstrings, but do not change the code or indentation.\n\nHere is the code:\n$visual\n\nRemember to respond only with code inside a code block.",
+Let's break down the alteration instructions:
+$user
+
+First, summarize the alteration request. Next, outline the steps required to complete this task. Finally, rewrite the code and respond only with the new code inside a code block.
+      ]],
+      description = "alter the selection with a structured approach",
+      replace = false,
+      system = "As an expert in programming, meticulously analyze the user's instructions and the existing code, then apply best practices in code alteration to ensure an optimized and accurate rewrite.",
+    },
+    chat = {
+        prompt = [[
+User has a programming question: $user
+
+As an expert programmer and teacher, first, identify and restate the key points of the user's question to ensure a clear understanding. Then, break down your response into structured steps:
+
+1. **Clarification**: If the question is ambiguous or lacks details, clarify the requirements or ask for additional information.
+
+2. **Explanation**: Provide a detailed explanation of the concept or solution. Use simple language and, if necessary, analogies to explain complex ideas.
+
+3. **Code Examples**: If the question involves code, include relevant code snippets. Make sure to comment the code for better understanding.
+
+4. **Additional Tips**: Offer best practices, common pitfalls to avoid, and any other tips that might be helpful.
+
+5. **Further Resources**: Suggest resources for additional learning or deeper understanding (e.g., documentation, tutorials, forums).
+
+End your response with a summary or a quick recap, ensuring that the user's question has been fully addressed.
+        ]],
         replace = false,
+        description = "prompt for programming questions",
+        system = "As an expert programmer, provide in-depth, authoritative explanations and solutions. Use your extensive knowledge to offer insights, advanced tips, and relevant code examples.",
+    },
+    complete = {
+      prompt = [[
+Complete the function, given the function definition and docstring.
+
+Function to complete:
+$visual
+
+First, summarize the function's purpose and expected behavior based on the definition and docstring. Then, write the code to complete the function. Remember to only respond with the new code inside a code block.
+      ]],
+      description = "complete the function with preliminary analysis",
+      replace = false,
+      system = "As an expert in software development, thoroughly interpret the function's requirements and craft a solution that is both efficient and adheres to advanced programming standards.",
+    },
+    debug = {
+        prompt = [[
+Identify bugs in the following code:
+
+$visual
+
+Start by outlining potential areas of concern in the code. Then, examine each area step-by-step to identify any bugs. Provide a detailed analysis of each issue found.
+        ]],
+        replace = false,
+        description = "structured debugging process",
+        system = "Utilize your expertise in programming to conduct a detailed and comprehensive debugging process. Identify and explain the bugs while suggesting robust solutions and improvements.",
     },
     document = {
-        prompt = "Add a docstrings and type annotations, but do not change the code or indentation.\n\nHere is the code:\n$visual\n\nRemember to only respond with code inside a code block.",
+        prompt = [[
+Add docstrings and type annotations to the following code:
+
+$visual
+
+Before adding documentation, describe the function's behavior and parameters in plain language. Then, use this description to create accurate and informative docstrings and type annotations. Remember to only respond with code inside a code block.
+        ]],
         replace = false,
+        description = "documenting code with preliminary description",
+        system = "As an expert, meticulously document the provided code. Your documentation should not only be accurate but also provide deep insights into the code's functionality and usage.",
     },
-
-    func = {
-        prompt = "Generate a python function with a docstring.\n\nHere is the function description:\n$user\n\nRemember to only respond with code inside a code block. Do not supply test code.",
-        replace = false,
-    },
-
-    context = {
-        prompt = "Generate a python function with a docstring.\n\nHere is the context from the script to use as a reference:\n$visual\n\nHere is the function description:\n$user\n\nRemember to only respond with code inside a code block. Do not supply test code. Be sure to write the new function in context with the provided script.",
-        replace = false,
-    },
-
-    alter = {
-      prompt = "Here is a section of code that needs to be rewritten:\n$visual\n\nUse these instructions to make your alterations:\n$user\n\nRemember to only respond with the new code inside a code block. Do not supply test code.",
-      replace = false,
-    },
-
-    autotests = {
-      prompt = "Here is a section of code that needs to have tests written:\n$visual\n\nMock interfaces and objects as needed.\n\nRemember to only respond with the new code inside a code block.",
-      replace = false,
-    },
-
-    vars = {
-      prompt = "Use best practices to improve the naming of variables, functions or class names in this script. Only change the names of local variables.\n\nHere is the code:\n$visual\n\nRemember to only respond with the new code inside a code block. It is not safe to change the names of functions, arguments or things that are not local.",
-      replace = false,
-    },
-
-    complete = {
-      prompt = "Complete the function, given the function definition and docstring.\n\nHere is the function to complete:\n$visual\n\nRemember to only respond with the new code inside a code block.",
-      replace = false,
-    },
-
     query = {
-      prompt = "Use the provided code as context, along with expert knowledge to answer the user's question.\n\nHere is the code:\n$visual\n\nQuestion:\n$user",
-      replace = false,
-    },
+      prompt = [[
+Use the provided code as context to answer the user's question.
 
-    plan = {
-      prompt = "You will assist a user in planning a project. Your job is to do the planning and present it to the user.\n\nIf the user has started a plan it is here:\n$visual\n\nUser's request:\n$user",
+Code context:
+$visual
+
+User's question:
+$user
+
+First, restate or summarize the question to confirm understanding. Then, using the code as a reference, answer the question step-by-step, explaining the reasoning behind each part of your answer.
+      ]],
       replace = false,
-      options = {
-          temperature = 1.2
-      }
-    }
+      description = "structured query response with code context",
+      system = "Leverage your comprehensive programming expertise to provide a detailed, accurate, and insightful answer to the user's query, utilizing the code as a foundational reference point.",
+    },
 }
 

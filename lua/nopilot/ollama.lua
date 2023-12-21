@@ -46,6 +46,11 @@ function ollama.new(config)
                 stream = true
             }
 
+            -- for custom system message if provided
+            if opts.system and opts.system ~= "" then
+                body.system = opts.system
+            end
+
             -- Include context if it exists
             if context then
                 body.context = context

@@ -150,6 +150,12 @@ local function get_window_options()
     }
 end
 
+local function add_system_message_to_session(prompt)
+    if prompt:match("%S") then
+        table.insert(M.session, {role = "system", content = prompt})
+    end
+end
+
 local function add_user_message_to_session(prompt)
     table.insert(M.session, {role = "user", content = prompt})
 end
@@ -287,6 +293,9 @@ M.exec = function(options)
 
     -- Add the formatted user message to the session.
     if M.backend.use_messages then
+        if #M.session == 0 then
+            add_system_message_to_session(opts.system)
+        end
         add_user_message_to_session(prompt)
     end
 
@@ -590,23 +599,26 @@ local function determineInputs(promptText)
     return table.concat(inputs, ", ")
 end
 
--- Function to create display text for menu items
-local function createDisplayText(promptKey, promptText)
+-- Updated function to create display text for menu items
+local function createDisplayText(promptKey, promptText, promptDescription)
     local inputs = determineInputs(promptText)
-    if inputs ~= "" then
-        return promptKey .. " [" .. inputs .. "]"
-    else
-        return promptKey
+    local displayText = promptKey
+    if promptDescription ~= "" then
+        displayText = displayText .. " - " .. promptDescription
     end
+    if inputs ~= "" then
+        displayText = displayText .. " [" .. inputs .. "]"
+    end
+    return displayText
 end
 
--- Function to select a prompt
+-- Updated function to select a prompt
 function select_prompt(cb)
     local menuItems = {}
     for key, value in pairs(M.prompts) do
         local item = {
             name = key,
-            displayText = createDisplayText(key, value.prompt)
+            displayText = createDisplayText(key, value.prompt, value.description or "")
         }
         table.insert(menuItems, item)
     end
