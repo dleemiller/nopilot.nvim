@@ -62,15 +62,19 @@ Start by outlining potential areas of concern in the code. Then, examine each ar
     },
     document = {
         prompt = [[
-Add docstrings and type annotations to the following code:
+First, analyze and describe the functionality of the following Python code. Then, use your analysis to enhance the code with detailed docstrings and type annotations:
 
 $visual
 
-Before adding documentation, describe the function's behavior and parameters in plain language. Then, use this description to create accurate and informative docstrings. For type annotations, only type annotate the function definitions.
+1. Analysis: Start by describing what each class and function in the code does. Focus on their purpose, how they work, and their interactions within the code.
+2. Enhancement: Based on your analysis, add comprehensive docstrings above each class and function. Include specific use cases, examples, or insights into the internal logic.
+3. Type Annotations: Apply type annotations to all function arguments, return values, and class attributes.
+
+The output should be two parts: your analysis of the code, followed by the complete, revised code with in-depth docstrings and full type annotations.
         ]],
         replace = false,
-        description = "documenting code with preliminary description",
-        system = "As an expert, meticulously document the provided code. Your documentation should not only be accurate but also provide deep insights into the code's functionality and usage.",
+        description = "enhance code with docstrings and type annotations",
+        system = "Use a chain of thought approach to first analyze the code and then enhance it with detailed documentation and annotations.",
     },
     query = {
       prompt = [[
